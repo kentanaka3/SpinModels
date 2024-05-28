@@ -17,7 +17,7 @@ set(INCLUDE_DIR "${PROJECT_SOURCE_DIR}/inc")
 set(LIBRARY_DIR "${PROJECT_SOURCE_DIR}/lib")
 
 # Define minimum C++ version for Mac
-set(CMAKE_CXX_STANDARD 23)
+set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # Define colors for bringing attention to OMP & MPI ON/OFF
