@@ -1120,7 +1120,7 @@ shown, this exponent may not be unique, providing us with further insights yet
 to be discovered.
 ## Objectives
 1. Apply High Performance Computing (HPC) techniques to solve Spin systems
-
+2. Use quantum methods to study quantum effects (i.e, entanglement in Spin Model, ...) and possibly make a publication.
 ## Methodology
 
 ## Results
