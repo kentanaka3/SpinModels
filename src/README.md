@@ -82,3 +82,5 @@ $$\begin{aligned}
 \uparrow\uparrow\downarrow\downarrow
 \end{aligned}$$
 
+
+Last but not least, the algorithm is enabled to add different time scale objects in Live recursivity. All of this was implemented to simplify and accelerate all Element to Element interaction including manifold shadowing or any MCMC
