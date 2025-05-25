@@ -12,18 +12,75 @@
 
 const int MAX_RECURSION = 988;
 
-std::uniform_real_distribution<double> Uniform(0.0, 1.0);
+#include <random>
+#include <string>
+
+#include <string>
+#include <random>
+#include <limits>
+
+class Distribution {
+protected:
+  std::mt19937_64 rng;
+private:
+  uint64_t seed;
+public:
+  std::string name;
+  double mean, median, mode, variance, skewness, kurtosis, entropy;
+  Distribution(std::string name, uint64_t seed) : name(name), seed(seed),
+                                                  rng(seed) {rng.seed(seed);}
+  virtual ~Distribution() = default;
+  virtual double PMF(double x) const = 0;
+  virtual double CDF(double x) const = 0;
+  virtual double eval(std::mt19937_64 rng);
+};
+
+class Degenerate : public Distribution {
+public:
+  double a;
+  Degenerate(std::string name, uint64_t seed, double a)
+    : Distribution(name, seed), a(a) {
+    // Initialize statistical properties
+    mean = a;
+    median = a;
+    mode = a;
+    variance = 0.0;
+    skewness = std::numeric_limits<double>::quiet_NaN(); // Undefined
+    kurtosis = std::numeric_limits<double>::quiet_NaN(); // Undefined
+    entropy = 0.0;
+  }
+  double PMF(double x) const override {return (x == a) ? 1.0 : 0.0;}
+  double CDF(double x) const override {return (x >= a) ? 1.0 : 0.0;}
+  double operator()() override {return a;}
+};
+
+class Uniform : public Distribution {
+public:
+  double a, b;
+  Uniform(std::string name, uint64_t seed, const double& a, const double& b)
+    : Distribution(name, seed), a(a), b(b) {}
+  double eval(std::mt19937_64 rng) {
+    std::uniform_real_distribution<double> dist(0.0, 1.0);
+    return dist(rng);
+  }
+};
+
 const double PI=3.14159264;
-std::vector<double> Normal(std::mt19937& rng, const std::vector<double>& u,
-                           const double& mu, const double& sigma) {
-  double r = sqrt(-2.*log(u[0]));
-  std::vector<double> z(u.size());
-  z[0] = sigma * r * cos(2. * PI * u[1]) + mu;
-  z[1] = sigma * r * sin(2. * PI * u[1]) + mu;
+std::vector<double> Normal2D(const double& mu, const double& sigma,
+                             const std::vector<double>& u) {
+  double r = sqrt(-2. * log(u[0]));
+  std::vector<double> z(u.size(), sigma * r);
+  z[0] = z[0] * cos(2. * PI * u[1]) + mu;
+  z[1] = z[1] * sin(2. * PI * u[1]) + mu;
   return z;
 }
-std::vector<double> Normal(std::mt19937& rng, const std::vector<double>& u) {
-  return Normal(rng, u, 0., 1.);
+std::vector<double> Normal2D(std::mt19937_64& rng, const double& mu,
+                             const double& sigma) {
+  std::vector<double> u(2, Uniform(rng));
+  return Normal2D(mu, sigma, u);
+}
+std::vector<double> Normal2D(std::mt19937_64& rng) {
+  return Normal2D(rng, 0., 1.);
 }
 bool Bernoulli(std::mt19937& rng, const double& p) {return Uniform(rng) < p;}
 bool Bernoulli(std::mt19937& rng) {return Bernoulli(rng, 0.5);}
@@ -96,6 +153,7 @@ public:
   double BoltzmannFactor(const double& Delta) {
     return (temperature > 0.) ? exp(Delta / (BOLTZMANN * temperature)) : (double)(Delta <= 0);
   }
+  double WalkerFactor() {return 0.5;}
   IsingSpin& getParticle(int idx) {return particles[idx];}
   int Observables(int T, int const& verbose) {
     int H = 0, M = 0, AC = 0, P = 0;
@@ -169,9 +227,9 @@ void IsingSpin::live() {
 
   // If temperature is 0, Glauber algorithm is equivalent to Metropolis algorithm
   // Glauber algorithm -> Softargmax (Boltzmann distribution)
-  if (Uniform(rng) < universe->BoltzmannFactor(delta_E)) {
-    // U(0, 1) < exp()
-    // Bernoulli(p = exp())
+  // try:
+  // if (Bernoulli(rng, universe->WalkerFactor())) {
+  if (Bernoulli(rng, universe->BoltzmannFactor(delta_E))) {
     persist = false;
     value = -value;
   }
