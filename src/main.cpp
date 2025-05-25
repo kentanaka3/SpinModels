@@ -13,8 +13,47 @@
 const int MAX_RECURSION = 988;
 
 std::uniform_real_distribution<double> Uniform(0.0, 1.0);
+const double PI=3.14159264;
+std::vector<double> Normal(std::mt19937& rng, const std::vector<double>& u,
+                           const double& mu, const double& sigma) {
+  double r = sqrt(-2.*log(u[0]));
+  std::vector<double> z(u.size());
+  z[0] = sigma * r * cos(2. * PI * u[1]) + mu;
+  z[1] = sigma * r * sin(2. * PI * u[1]) + mu;
+  return z;
+}
+std::vector<double> Normal(std::mt19937& rng, const std::vector<double>& u) {
+  return Normal(rng, u, 0., 1.);
+}
+bool Bernoulli(std::mt19937& rng, const double& p) {return Uniform(rng) < p;}
+bool Bernoulli(std::mt19937& rng) {return Bernoulli(rng, 0.5);}
+double Binomial(std::mt19937& rng, const int& n, const double& p) {
+  int X = 0; // Number of successes
+  for (int i = 0; i < n; ++i) X += Bernoulli(rng, p);
+  return (double)X / n; // Return the fraction of successes
+}
+double Binomial(std::mt19937& rng, const int& n) {
+  return Binomial(rng, n, 0.5);
+}
+int Rad(std::mt19937& rng) {return Bernoulli(rng) * 2 - 1;}
 
 class Universe;
+
+class RandWalker {
+private:
+  std::mt19937 rng;  // Individual RNG for thread safety
+
+public:
+  int id, value;
+  bool persist;
+  std::set<int> neighbors;
+  Universe* universe;
+  unsigned int seed;
+  RandWalker(int id, int value, std::set<int> neighbors, Universe* universe)
+      : id(id), value(value), neighbors(neighbors), universe(universe),
+        persist(true), seed(rand()) {rng.seed(seed);}
+  void live();
+};
 
 class IsingSpin {
 private:
@@ -52,6 +91,10 @@ public:
     }
     particles0.reserve(particles.size());
     for (const auto& p : particles) particles0.emplace_back(p.value);
+  }
+  const double BOLTZMANN=1.;
+  double BoltzmannFactor(const double& Delta) {
+    return (temperature > 0.) ? exp(Delta / (BOLTZMANN * temperature)) : (double)(Delta <= 0);
   }
   IsingSpin& getParticle(int idx) {return particles[idx];}
   int Observables(int T, int const& verbose) {
@@ -115,22 +158,26 @@ int IsingSpin::h() {
 }
 
 void IsingSpin::live() {
+  // (2 * value) = (s_{mu} - s_{nu}) = 2 * Rad_i()
+  // h() = Rad_j() + Rad_k()
+  // 2 * (Rad_i()*Rad_j() + Rad()_i*Rad_k()), k != i != j != k, Rad() => State
+  // 2 * (Rad_u() + Rad_v()), Rad_u() = AND(i, j),        Rad() => Interaction
+  //                          Rad_v() = AND(i, k),
+  // \Delta = SUM_i^n(Rad_i)
   int delta_E = 2 * value * h();
 
-  // Metropolis algorithm -> Step function (temperature = 0)
-  //double prob = (delta_E <= 0) ? 1.0 : ((universe->temperature > 0.) ? exp(-delta_E / universe->temperature) : 0.);
-
-  // Glauber algorithm -> Softargmax (Boltzmann distribution)
-  double prob = (universe->temperature > 0.) ? exp(-delta_E / universe->temperature) : (double)(delta_E <= 0);
 
   // If temperature is 0, Glauber algorithm is equivalent to Metropolis algorithm
-
-  if (Uniform(rng) < prob) {
+  // Glauber algorithm -> Softargmax (Boltzmann distribution)
+  if (Uniform(rng) < universe->BoltzmannFactor(delta_E)) {
+    // U(0, 1) < exp()
+    // Bernoulli(p = exp())
     persist = false;
     value = -value;
   }
 }
 
+void RandWalker::live() {value += Rad(rng);}
 
 std::vector<std::set<int>> PBC3D(const int& M, const int& N, const int& L) {
   std::vector<std::set<int>> adjacency_list(M * N * L);
@@ -185,19 +232,19 @@ std::vector<std::set<int>> FCN(const std::vector<int>& dims) {
 }
 
 int main() {
-  int N = .4 * 10e1;
+  int N = .4 * 10e3;
   omp_set_num_threads(omp_get_max_threads());
   srand(time(0));
   // try:
   // std::vector<int> dims = {N, N, N};
-  std::vector<int> dims = {N, N};
+  std::vector<int> dims = {N};
   // try:
   auto adjacency_list = PBC(dims); // Periodic Boundary Conditions
   // auto adjacency_list = FCN(dims); // Fully Connected Network
   // try:
   // Universe myUniverse("Ising Model - Ring", 0., dims, adjacency_list); // Zero temperature
-  Universe myUniverse("Ising Model - Ring", 1., dims, adjacency_list);
-  std::vector<int> M = {2};
+  Universe myUniverse("Ising Model - Ring", 1., dims, adjacency_list); // Non-sero temperature
+  std::vector<int> M = {100}; // Measurements, working on becoming a lambda function generator function. Linear, quadratic, polinomial, exponential, or logarithmic measurements are some of the few I will be implementing as examples.
   myUniverse.run(N * N, M, 3);
   return 0;
 }
